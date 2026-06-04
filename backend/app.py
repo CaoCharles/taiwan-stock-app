@@ -62,7 +62,7 @@ def get_stock():
         ticker += '.TW'
 
     try:
-        df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=False)
+        df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
         if df.empty:
             return jsonify({'error': f'找不到 {ticker} 的資料，請確認代號正確'}), 404
 
@@ -72,15 +72,13 @@ def get_stock():
 
         rows = []
         for idx, row in df.iterrows():
-            ts = int(idx.timestamp() * 1000)
-            r  = get_split_ratio(ticker, ts)
             rows.append({
                 'date':  idx.strftime('%Y-%m-%d'),
-                'open':  round(float(row['Open'])  * r, 2) if pd.notna(row['Open'])   else None,
-                'high':  round(float(row['High'])  * r, 2) if pd.notna(row['High'])   else None,
-                'low':   round(float(row['Low'])   * r, 2) if pd.notna(row['Low'])    else None,
-                'close': round(float(row['Close']) * r, 2) if pd.notna(row['Close'])  else None,
-                'vol':   int(row['Volume'])                 if pd.notna(row['Volume']) else None,
+                'open':  round(float(row['Open']),  2) if pd.notna(row['Open'])   else None,
+                'high':  round(float(row['High']),  2) if pd.notna(row['High'])   else None,
+                'low':   round(float(row['Low']),   2) if pd.notna(row['Low'])    else None,
+                'close': round(float(row['Close']), 2) if pd.notna(row['Close'])  else None,
+                'vol':   int(row['Volume'])              if pd.notna(row['Volume']) else None,
             })
 
         return jsonify({
@@ -114,13 +112,15 @@ def get_seasonal():
         ticker += '.TW'
 
     try:
-        df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=False)
+        df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
         if df.empty:
             return jsonify({'error': '找不到資料'}), 404
 
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
         df['yr'] = df.index.year
         df['mo'] = df.index.month
         result = {}
