@@ -1,14 +1,59 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>台股投資分析</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>景氣選股 · 台股投資分析</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #080b12; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  #root { min-height: 100vh; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #232c3d; border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: #313c52; }
+  input::placeholder { color: #5b6680; }
+  button { font-family: inherit; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- 靜態資料 -->
+<script src="app/theme.js"></script>
+<script src="app/lights.js"></script>
+
+<!-- 全域常數 -->
+<script>
+window.LIGHT_META = {
+  red:         { key:'red',         zh:'紅燈',   desc:'景氣過熱', range:'38–45', dot:'#ff5d5d', soft:'rgba(255,93,93,0.16)',  glow:'rgba(255,93,93,0.55)' },
+  yellow_red:  { key:'yellow_red',  zh:'黃紅燈', desc:'景氣轉熱', range:'32–37', dot:'#ffa53d', soft:'rgba(255,165,61,0.15)', glow:'rgba(255,165,61,0.5)' },
+  green:       { key:'green',       zh:'綠燈',   desc:'景氣穩定', range:'23–31', dot:'#22c98e', soft:'rgba(34,201,142,0.13)', glow:'rgba(34,201,142,0.5)' },
+  yellow_blue: { key:'yellow_blue', zh:'黃藍燈', desc:'景氣轉弱', range:'17–22', dot:'#62a0ff', soft:'rgba(98,160,255,0.13)', glow:'rgba(98,160,255,0.5)' },
+  blue:        { key:'blue',        zh:'藍燈',   desc:'景氣低迷', range:'9–16',  dot:'#4a6bff', soft:'rgba(74,107,255,0.18)', glow:'rgba(74,107,255,0.55)' },
+};
+window.LIGHT_ORDER = ['red','yellow_red','green','yellow_blue','blue'];
+window.TICKERS = [
+  { code:'0050.TW',  name:'元大台灣50',     cat:'市值型 ETF' },
+  { code:'0056.TW',  name:'元大高股息',     cat:'高股息 ETF' },
+  { code:'2330.TW',  name:'台積電',         cat:'半導體' },
+  { code:'00878.TW', name:'國泰永續高股息', cat:'高股息 ETF' },
+  { code:'2317.TW',  name:'鴻海',           cat:'電子代工' },
+];
+</script>
+
+<!-- UI 元件 -->
+<script type="text/babel" src="app/Chart.jsx"></script>
+<script type="text/babel" src="app/Panels.jsx"></script>
+<script type="text/babel" src="app/Compare.jsx"></script>
+<script type="text/babel" src="app/App.jsx"></script>
+</body>
 </html>
