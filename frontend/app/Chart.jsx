@@ -15,7 +15,7 @@ function useWidth(){
 }
 window.__useWidth = useWidth;
 
-function PriceChart({ rows, height=360, accent, showMA=true, compact=false }){
+function PriceChart({ rows, height=360, accent, showMA=true, compact=false, showLights=true }){
   const T = window.T, LM = window.LIGHT_META, LIGHTS = window.LIGHTS;
   accent = accent || T.acc;
   const [wrapRef, W] = useWidth();
@@ -106,7 +106,7 @@ function PriceChart({ rows, height=360, accent, showMA=true, compact=false }){
             React.createElement('stop',{offset:'100%',stopColor:accent,stopOpacity:0})),
         ),
         // month light bands
-        months.map((m,k)=>{ const li=LIGHTS[m.ym]; if(!li)return null; const meta=LM[li.l]; if(!meta)return null;
+        showLights && months.map((m,k)=>{ const li=LIGHTS[m.ym]; if(!li)return null; const meta=LM[li.l]; if(!meta)return null;
           const x1=x(m.i1), x2=x(m.i2+1>=n? n-1 : m.i2)+ (plotW/Math.max(1,n-1))*0.5;
           return React.createElement('rect',{ key:'b'+k, x:x1, y:padT, width:Math.max(0.5,x2-x1), height:plotH, fill:meta.soft });
         }),
@@ -130,7 +130,7 @@ function PriceChart({ rows, height=360, accent, showMA=true, compact=false }){
         yearTicks.map((t,k)=> (t.i>2 && (!compact || (+t.yr)%2===0)) && React.createElement('text',{ key:'x'+k, x:x(t.i), y:plotBottom+13, fill:T.txDim, fontSize:10.5, fontFamily:window.MONO, textAnchor:'middle' }, t.yr)),
         yearTicks.map((t,k)=> t.i>2 && React.createElement('line',{ key:'xl'+k, x1:x(t.i), x2:x(t.i), y1:padT, y2:plotBottom, stroke:T.grid, strokeWidth:1 })),
         // ===== 景氣燈號 RIBBON =====
-        (()=>{ const ry = plotBottom + ribbonGap + xLabelH;
+        showLights && (()=>{ const ry = plotBottom + ribbonGap + xLabelH;
           return React.createElement('g',null,
             months.map((m,k)=>{ const li=LIGHTS[m.ym]; if(!li)return null; const meta=LM[li.l]; if(!meta)return null;
               const x1=x(m.i1), x2=k+1<months.length? x(months[k+1].i1): padL+plotW;
@@ -152,7 +152,7 @@ function PriceChart({ rows, height=360, accent, showMA=true, compact=false }){
         React.createElement('div',{ style:{ fontSize:11, color:T.txDim, fontFamily:window.MONO, marginBottom:3 } }, hov.date),
         React.createElement('div',{ style:{ fontSize:19, fontWeight:800, color:accent, fontFamily:window.MONO, lineHeight:1 } }, window.fmt.price(hov.close)),
         React.createElement('div',{ style:{ fontSize:10.5, color:T.txDim, fontFamily:window.MONO, marginTop:4 } }, `高 ${window.fmt.price(hov.high)}　低 ${window.fmt.price(hov.low)}`),
-        hovLight && (()=>{ const meta=LM[hovLight.l]; return React.createElement('div',{ style:{ display:'flex',alignItems:'center',gap:6,marginTop:7,paddingTop:7,borderTop:`1px solid ${T.lineSoft}` } },
+        showLights && hovLight && (()=>{ const meta=LM[hovLight.l]; return React.createElement('div',{ style:{ display:'flex',alignItems:'center',gap:6,marginTop:7,paddingTop:7,borderTop:`1px solid ${T.lineSoft}` } },
           window.UI.Dot({ c:meta.dot, size:8, glow:meta.glow }),
           React.createElement('b',{ style:{ color:meta.dot, fontSize:12 } }, hovLight.z),
           React.createElement('span',{ style:{ color:T.txDim, fontSize:10.5, fontFamily:window.MONO, marginLeft:'auto' } }, hovLight.s+'分')

@@ -5,7 +5,7 @@ API文件: http://localhost:5000/api/docs
 """
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import yfinance as yf, pandas as pd, json, os
+import yfinance as yf, pandas as pd, numpy as np, json, os, re
 from datetime import date, datetime
 
 app = Flask(__name__)
@@ -20,6 +20,25 @@ with open(os.path.join(DATA_DIR, 'lights.json'), encoding='utf-8') as f:
 KNOWN_SPLITS = {
     "0050.TW": [{"date": "2025-06-18", "ratio": 4}],
 }
+
+def normalize_ticker(ticker):
+    """正規化股票代號：
+       - 已含後綴（含 '.'）→ 原樣（例：0050.TW、BRK.B）
+       - 以數字開頭（台股代號 0050、2330）→ 補 .TW
+       - 純英文（美股 VOO、QQQ、SPY）→ 不補後綴
+    """
+    t = (ticker or '').upper().strip()
+    if not t:
+        return t
+    if '.' in t:
+        return t
+    if t[0].isdigit():
+        return t + '.TW'
+    return t  # 美股 bare symbol
+
+def ticker_currency(ticker):
+    """依後綴推測幣別（僅供顯示用）"""
+    return 'TWD' if ticker.upper().endswith('.TW') else 'USD'
 
 def score_to_light(s):
     s = int(s)
@@ -48,6 +67,7 @@ def docs():
             "GET /api/stock":    "params: ticker, start, end → 日K資料（自動拆股還原）",
             "GET /api/lights":   "景氣燈號（全部）",
             "GET /api/seasonal": "params: ticker, start, end → 3-4月季節性分析",
+            "GET /api/compare":  "params: tickers(逗號分隔), start, end → 多股報酬/風險/定期定額/相關性",
             "GET /api/suggest":  "常用股票清單",
         }
     })
@@ -55,11 +75,9 @@ def docs():
 
 @app.route('/api/stock')
 def get_stock():
-    ticker = request.args.get('ticker', '0050.TW').upper().strip()
+    ticker = normalize_ticker(request.args.get('ticker', '0050.TW'))
     start  = request.args.get('start',  '2016-01-01')
     end    = request.args.get('end',    date.today().strftime('%Y-%m-%d'))
-    if '.' not in ticker:
-        ticker += '.TW'
 
     try:
         df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
@@ -82,12 +100,13 @@ def get_stock():
             })
 
         return jsonify({
-            'ticker': ticker,
-            'start':  start,
-            'end':    end,
-            'count':  len(rows),
-            'rows':   rows,
-            'splits': KNOWN_SPLITS.get(ticker, []),
+            'ticker':   ticker,
+            'currency': ticker_currency(ticker),
+            'start':    start,
+            'end':      end,
+            'count':    len(rows),
+            'rows':     rows,
+            'splits':   KNOWN_SPLITS.get(ticker, []),
         })
 
     except Exception as e:
@@ -105,11 +124,9 @@ def get_lights():
 
 @app.route('/api/seasonal')
 def get_seasonal():
-    ticker = request.args.get('ticker', '0050.TW').upper().strip()
+    ticker = normalize_ticker(request.args.get('ticker', '0050.TW'))
     start  = request.args.get('start',  '2016-01-01')
     end    = request.args.get('end',    date.today().strftime('%Y-%m-%d'))
-    if '.' not in ticker:
-        ticker += '.TW'
 
     try:
         df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
@@ -168,7 +185,122 @@ def suggest():
         {"ticker": "2317.TW",  "name": "鴻海",              "type": "股票"},
         {"ticker": "2454.TW",  "name": "聯發科",            "type": "股票"},
         {"ticker": "006208.TW","name": "富邦台灣50",        "type": "ETF"},
+        {"ticker": "VOO",      "name": "Vanguard S&P 500",  "type": "美股 ETF"},
+        {"ticker": "QQQ",      "name": "Invesco 那斯達克100","type": "美股 ETF"},
     ])
+
+
+# ── 多股分析比較 ────────────────────────────────────────────────────────────────
+
+def _close_series(ticker, start, end):
+    """下載單一標的收盤價，回傳 pandas Series（index=日期）"""
+    df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
+    if df.empty:
+        return None
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df['Close'].dropna()
+
+def _window_return(s, days):
+    """近 N 天的累積報酬率（%）；資料不足則用全期"""
+    if len(s) < 2:
+        return None
+    last = s.index[-1]
+    cut  = last - pd.Timedelta(days=days)
+    win  = s[s.index >= cut]
+    if len(win) < 2:
+        return None
+    return round(float(win.iloc[-1] / win.iloc[0] - 1) * 100, 1)
+
+def _metrics(s):
+    """單一標的的報酬／風險指標"""
+    first, last = float(s.iloc[0]), float(s.iloc[-1])
+    yrs  = max(0.1, (s.index[-1] - s.index[0]).days / 365.25)
+    cagr = (pow(last / first, 1 / yrs) - 1) * 100
+
+    daily = s.pct_change().dropna()
+    vol   = float(daily.std() * np.sqrt(252) * 100) if len(daily) > 1 else 0.0
+
+    peak = s.cummax()
+    mdd  = float(((s - peak) / peak).min() * 100)
+
+    rf = 2.0  # 假設無風險利率 2%
+    sharpe = (cagr - rf) / vol if vol > 0 else 0.0
+
+    return {
+        'ret':  {'1Y': _window_return(s, 365), '3Y': _window_return(s, 365 * 3),
+                 '5Y': _window_return(s, 365 * 5),
+                 'ALL': round((last / first - 1) * 100, 1)},
+        'cagr': round(cagr, 1),
+        'vol':  round(vol, 1),
+        'mdd':  round(mdd, 1),
+        'sharpe': round(sharpe, 2),
+    }
+
+def _dca(s):
+    """定期定額模擬：每月第一個交易日投入固定金額，回傳報酬率（%，與金額無關）"""
+    monthly = s.groupby([s.index.year, s.index.month]).head(1)  # 各月首個交易日
+    units = 0.0
+    invest_each = 1.0  # 報酬率與金額無關，用 1 單位即可
+    for price in monthly.values:
+        units += invest_each / float(price)
+    invested = invest_each * len(monthly)
+    final    = units * float(s.iloc[-1])
+    return {
+        'months':   int(len(monthly)),
+        'lump_ret': round((float(s.iloc[-1]) / float(s.iloc[0]) - 1) * 100, 1),  # 單筆投入報酬
+        'dca_ret':  round((final - invested) / invested * 100, 1),
+    }
+
+
+@app.route('/api/compare')
+def compare():
+    raw    = request.args.get('tickers', '0050.TW,VOO,QQQ')
+    start  = request.args.get('start', '2016-01-01')
+    end    = request.args.get('end',   date.today().strftime('%Y-%m-%d'))
+    tickers = [normalize_ticker(t) for t in raw.split(',') if t.strip()]
+    if not tickers:
+        return jsonify({'error': '請提供 tickers'}), 400
+
+    try:
+        series  = {}
+        metrics = {}
+        for t in tickers:
+            s = _close_series(t, start, end)
+            if s is None or len(s) < 2:
+                continue
+            series[t]  = s
+            metrics[t] = {
+                'currency': ticker_currency(t),
+                **_metrics(s),
+                'dca': _dca(s),
+            }
+
+        if not series:
+            return jsonify({'error': '找不到任何標的資料'}), 404
+
+        # 相關係數矩陣（日報酬，取共同交易日）
+        rets = pd.DataFrame({t: s.pct_change() for t, s in series.items()}).dropna()
+        corr = {}
+        common_start = common_end = None
+        if len(rets) > 1:
+            cm = rets.corr().round(2)
+            corr = {a: {b: float(cm.loc[a, b]) for b in cm.columns} for a in cm.index}
+            common_start = rets.index[0].strftime('%Y-%m-%d')
+            common_end   = rets.index[-1].strftime('%Y-%m-%d')
+
+        return jsonify({
+            'tickers':      list(series.keys()),
+            'start':        start,
+            'end':          end,
+            'metrics':      metrics,
+            'corr':         corr,
+            'common_start': common_start,
+            'common_end':   common_end,
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

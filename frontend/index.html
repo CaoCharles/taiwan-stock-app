@@ -42,12 +42,17 @@ window.LIGHT_META = {
 };
 window.LIGHT_ORDER = ['red','yellow_red','green','yellow_blue','blue'];
 window.TICKERS = [
-  { code:'0050.TW',  name:'元大台灣50',     cat:'市值型 ETF' },
-  { code:'0056.TW',  name:'元大高股息',     cat:'高股息 ETF' },
-  { code:'2330.TW',  name:'台積電',         cat:'半導體' },
-  { code:'00878.TW', name:'國泰永續高股息', cat:'高股息 ETF' },
-  { code:'2317.TW',  name:'鴻海',           cat:'電子代工' },
+  { code:'0050.TW',  name:'元大台灣50',     cat:'市值型 ETF',   ccy:'TWD' },
+  { code:'VOO',      name:'Vanguard S&P 500', cat:'美股 ETF',   ccy:'USD' },
+  { code:'QQQ',      name:'Invesco 那斯達克100', cat:'美股 ETF', ccy:'USD' },
+  { code:'0056.TW',  name:'元大高股息',     cat:'高股息 ETF',   ccy:'TWD' },
+  { code:'2330.TW',  name:'台積電',         cat:'半導體',       ccy:'TWD' },
+  { code:'00878.TW', name:'國泰永續高股息', cat:'高股息 ETF',   ccy:'TWD' },
+  { code:'2317.TW',  name:'鴻海',           cat:'電子代工',     ccy:'TWD' },
 ];
+// 通用：去除交易所後綴顯示；判斷是否美股
+window.dispCode = (c) => (c||'').replace(/\.\w+$/, '');
+window.isUS     = (c) => !!c && !/\.\w+$/.test(c);  // 無後綴 = 美股 bare symbol
 </script>
 
 <!-- UI 元件 -->
