@@ -2,7 +2,7 @@
 const { useState, useMemo, useEffect } = React;
 
 const API = 'https://taiwan-stock-app-5qgi.onrender.com/api';
-const COMPARE_TICKERS = ['0050.TW', '0056.TW', '2330.TW'];
+const COMPARE_TICKERS = ['0050.TW', 'VOO', 'QQQ'];
 
 function filterPeriod(rows, p) {
   if (p === 'ALL' || !rows.length) return rows;
@@ -20,7 +20,7 @@ function StockHeader({ code, name, st, period, setPeriod, big }) {
   return React.createElement('div', { style: { display: 'flex', alignItems: 'flex-end', gap: big ? 18 : 12, flexWrap: 'wrap' } },
     React.createElement('div', null,
       React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 9 } },
-        React.createElement('span', { style: { fontSize: big ? 26 : 20, fontWeight: 800, color: T.tx, fontFamily: window.MONO, letterSpacing: '0.01em' } }, code.replace('.TW', '')),
+        React.createElement('span', { style: { fontSize: big ? 26 : 20, fontWeight: 800, color: T.tx, fontFamily: window.MONO, letterSpacing: '0.01em' } }, window.dispCode(code)),
         React.createElement('span', { style: { fontSize: big ? 14 : 12.5, color: T.tx2, fontWeight: 600, whiteSpace: 'nowrap' } }, name)
       ),
       st && React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 6 } },
@@ -36,18 +36,19 @@ function StockHeader({ code, name, st, period, setPeriod, big }) {
 
 function SearchRow({ ticker, setTicker, compact }) {
   const T = window.T; const [v, setV] = useState('');
-  const go = () => { let t = v.trim().toUpperCase(); if (!t) return; if (!/\.\w+$/.test(t)) t += '.TW'; setTicker(t); setV(''); };
+  // 數字開頭 → 台股補 .TW；純英文 → 美股 bare symbol
+  const go = () => { let t = v.trim().toUpperCase(); if (!t) return; if (!/\.\w+$/.test(t) && /^\d/.test(t)) t += '.TW'; setTicker(t); setV(''); };
   return React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' } },
     React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, ...T.glassSoft, borderRadius: 10, padding: '2px 2px 2px 10px' } },
       React.createElement('span', { style: { color: T.txDim, fontSize: 13 } }, '⌕'),
       React.createElement('input', {
         value: v, onChange: e => setV(e.target.value), onKeyDown: e => e.key === 'Enter' && go(),
-        placeholder: '代號 2330', style: { width: compact ? 92 : 108, padding: '6px 4px', border: 'none', outline: 'none', background: 'transparent', color: T.tx, fontSize: 13, fontFamily: window.MONO }
+        placeholder: '2330 / VOO', style: { width: compact ? 92 : 108, padding: '6px 4px', border: 'none', outline: 'none', background: 'transparent', color: T.tx, fontSize: 13, fontFamily: window.MONO }
       }),
       React.createElement('button', { onClick: go, style: { padding: '6px 12px', background: T.acc, color: '#fff', border: 'none', borderRadius: 7, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' } }, '查詢')
     ),
     React.createElement('div', { style: { display: 'flex', gap: 5, flexWrap: 'wrap' } },
-      window.TICKERS.map(s => window.UI.Chip({ key: s.code, children: s.code.replace('.TW', ''), mono: true, active: s.code === ticker, onClick: () => setTicker(s.code) }))
+      window.TICKERS.map(s => window.UI.Chip({ key: s.code, children: window.dispCode(s.code), mono: true, active: s.code === ticker, onClick: () => setTicker(s.code) }))
     )
   );
 }
@@ -64,10 +65,11 @@ function LoadingOverlay({ height = 360 }) {
 }
 
 // ── DESKTOP ──
-function Desktop({ ticker, setTicker, period, setPeriod, rows, loading, cmp }) {
+function Desktop({ ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpData }) {
   const T = window.T, Pn = window.Pn;
   const meta = window.TICKERS.find(t => t.code === ticker) || { name: '' };
   const names = Object.fromEntries(window.TICKERS.map(t => [t.code, t.name]));
+  const us = window.isUS(ticker);
 
   const filtered = useMemo(() => filterPeriod(rows, period), [rows, period]);
   const st = useMemo(() => Pn.stats(filtered), [filtered]);
@@ -80,7 +82,7 @@ function Desktop({ ticker, setTicker, period, setPeriod, rows, loading, cmp }) {
     React.createElement('div', { style: { ...T.glass, borderRadius: 18, padding: '16px 22px', marginTop: 14, display: 'flex', alignItems: 'center', gap: 26, flexWrap: 'wrap' } },
       React.createElement('div', { style: { minWidth: 200 } },
         React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10 } },
-          React.createElement('span', { style: { fontSize: 27, fontWeight: 800, color: T.tx, fontFamily: window.MONO } }, ticker.replace('.TW', '')),
+          React.createElement('span', { style: { fontSize: 27, fontWeight: 800, color: T.tx, fontFamily: window.MONO } }, window.dispCode(ticker)),
           React.createElement('span', { style: { fontSize: 14, color: T.tx2, fontWeight: 600, whiteSpace: 'nowrap' } }, meta.name)
         ),
         st && React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 11, marginTop: 7 } },
@@ -91,7 +93,7 @@ function Desktop({ ticker, setTicker, period, setPeriod, rows, loading, cmp }) {
       React.createElement('div', { style: { width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)' } }),
       React.createElement(Pn.KPIInline, { st }),
       React.createElement('div', { style: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 } },
-        React.createElement(Pn.CurrentLight, null),
+        !us && React.createElement(Pn.CurrentLight, null),
         React.createElement('div', { style: { display: 'flex', gap: 5 } },
           PERIODS.map(p => window.UI.Chip({ key: p, children: p, mono: true, active: p === period, onClick: () => setPeriod(p) }))
         )
@@ -101,16 +103,15 @@ function Desktop({ ticker, setTicker, period, setPeriod, rows, loading, cmp }) {
     React.createElement(Pn.Panel, { pad: 18, style: { marginTop: 14 } },
       loading
         ? React.createElement(LoadingOverlay, { height: 430 })
-        : React.createElement(window.PriceChart, { rows: filtered, height: 430 }),
+        : React.createElement(window.PriceChart, { rows: filtered, height: 430, showLights: !us }),
       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, paddingTop: 14, marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.07)' } },
-        React.createElement('span', { style: { fontSize: 10.5, color: T.txDim } }, '底部色帶 / 背景 = 當月景氣燈號'),
-        React.createElement('div', { style: { marginLeft: 'auto' } }, React.createElement(Pn.Legend, { wrap: false }))
+        React.createElement('span', { style: { fontSize: 10.5, color: T.txDim } }, us ? '美股不套用台灣景氣燈號（燈號為台灣國發會指標）' : '底部色帶 / 背景 = 當月景氣燈號'),
+        !us && React.createElement('div', { style: { marginLeft: 'auto' } }, React.createElement(Pn.Legend, { wrap: false }))
       )
     ),
-    // insight
-    React.createElement('div', { style: { marginTop: 14 } }, React.createElement(Pn.InsightBanner, { seas, name: meta.name })),
-    // row B
-    React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: 14, marginTop: 14, alignItems: 'start' } },
+    // insight + 景氣/季節性（僅台股）
+    !us && React.createElement('div', { style: { marginTop: 14 } }, React.createElement(Pn.InsightBanner, { seas, name: meta.name })),
+    !us && React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: 14, marginTop: 14, alignItems: 'start' } },
       React.createElement(Pn.Panel, { title: '景氣燈號日曆', sub: '2016–2026 每月對策信號　▾ = 該年 3–4 月優質買點', pad: 18 },
         React.createElement(Pn.LightCalendar, { seas })
       ),
@@ -118,24 +119,61 @@ function Desktop({ ticker, setTicker, period, setPeriod, rows, loading, cmp }) {
         React.createElement(Pn.SeasonalPanel, { seas })
       )
     ),
-    // compare
-    React.createElement(Pn.Panel, { title: '多股對比', sub: '同期還原基準 = 100', pad: 18, style: { marginTop: 14 } },
-      React.createElement(window.CompareChart, { series: cmp, names, height: 220 })
+    // ── 三檔對比分析 ──
+    React.createElement(CompareSection, { cmp, cmpData, names }),
+  );
+}
+
+// ── 三檔對比分析區塊（0050 vs VOO vs QQQ）──
+function CompareSection({ cmp, cmpData, names }) {
+  const T = window.T, Pn = window.Pn;
+  const period = cmpData && cmpData.common_start
+    ? `共同區間 ${cmpData.common_start} ~ ${cmpData.common_end}` : '同期比較';
+  return React.createElement(React.Fragment, null,
+    React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, margin: '26px 2px 12px' } },
+      React.createElement('span', { style: { fontSize: 15, fontWeight: 800, color: T.tx } }, '三檔對比分析　0050 · VOO · QQQ'),
+      React.createElement('span', { style: { fontSize: 11, color: T.txDim, fontFamily: window.MONO } }, period)
+    ),
+    React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 14, alignItems: 'start' } },
+      React.createElement(Pn.Panel, { title: '走勢對比', sub: '同期還原基準 = 100（消除幣別差異）', pad: 18 },
+        React.createElement(window.CompareChart, { series: cmp, names, height: 240 })
+      ),
+      React.createElement(Pn.Panel, { title: '相關性矩陣', sub: '日報酬相關係數　越接近 1 連動越高、分散效果越低', pad: 18 },
+        cmpData ? React.createElement(Pn.CorrMatrix, { data: cmpData, names })
+          : React.createElement('div', { style: { color: T.txDim, fontSize: 12, padding: '20px 0' } }, '載入中...')
+      )
+    ),
+    React.createElement(Pn.Panel, { title: '報酬與風險比較', sub: '報酬率以 % 呈現，跨幣別可直接比較', pad: 18, style: { marginTop: 14 } },
+      cmpData ? React.createElement(Pn.CompareTable, { data: cmpData, names })
+        : React.createElement('div', { style: { color: T.txDim, fontSize: 12, padding: '20px 0' } }, '載入中...')
+    ),
+    React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14, alignItems: 'start' } },
+      React.createElement(Pn.Panel, { title: '定期定額試算', sub: '每月固定投入 vs 期初單筆投入的報酬率', pad: 18 },
+        cmpData ? React.createElement(Pn.DCAPanel, { data: cmpData, names })
+          : React.createElement('div', { style: { color: T.txDim, fontSize: 12, padding: '20px 0' } }, '載入中...')
+      ),
+      React.createElement(Pn.Panel, { title: '分散與重疊', sub: '成分股重疊與配置思考', pad: 18 },
+        React.createElement(Pn.OverlapNote, null)
+      )
     )
   );
 }
 
 // ── MOBILE ──
-function Mobile({ ticker, setTicker, period, setPeriod, rows, loading }) {
+function Mobile({ ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpData }) {
   const T = window.T, Pn = window.Pn;
   const [tab, setTab] = useState('chart');
   const meta = window.TICKERS.find(t => t.code === ticker) || { name: '' };
+  const us = window.isUS(ticker);
+  const names = Object.fromEntries(window.TICKERS.map(t => [t.code, t.name]));
 
   const filtered = useMemo(() => filterPeriod(rows, period), [rows, period]);
   const st = useMemo(() => Pn.stats(filtered), [filtered]);
   const seas = useMemo(() => Pn.seasonal(rows), [rows]);
 
-  const TABS = [['chart', '走勢'], ['seasonal', '季節性'], ['lights', '燈號']];
+  const TABS = us
+    ? [['chart', '走勢'], ['compare', '對比']]
+    : [['chart', '走勢'], ['compare', '對比'], ['seasonal', '季節性'], ['lights', '燈號']];
   return React.createElement(PhoneFrame, null,
     React.createElement('div', { style: { padding: '8px 14px 10px', borderBottom: `1px solid rgba(255,255,255,0.08)`, background: 'rgba(8,11,18,0.55)', backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)', position: 'sticky', top: 0, zIndex: 5 } },
       React.createElement(SearchRow, { ticker, setTicker, compact: true }),
@@ -149,8 +187,10 @@ function Mobile({ ticker, setTicker, period, setPeriod, rows, loading }) {
         React.createElement(Pn.Panel, { pad: 12 },
           loading
             ? React.createElement(LoadingOverlay, { height: 220 })
-            : React.createElement(window.PriceChart, { rows: filtered, height: 220, compact: true }),
-          React.createElement('div', { style: { marginTop: 10 } }, React.createElement(Pn.Legend, { wrap: true }))
+            : React.createElement(window.PriceChart, { rows: filtered, height: 220, compact: true, showLights: !us }),
+          us
+            ? React.createElement('div', { style: { marginTop: 10, fontSize: 10.5, color: T.txDim } }, '美股不套用台灣景氣燈號')
+            : React.createElement('div', { style: { marginTop: 10 } }, React.createElement(Pn.Legend, { wrap: true }))
         )
       ),
       React.createElement('div', { style: { display: 'flex', gap: 6, margin: '14px 0 12px', background: T.bg2, padding: 4, borderRadius: 10, border: `1px solid ${T.line}` } },
@@ -161,7 +201,20 @@ function Mobile({ ticker, setTicker, period, setPeriod, rows, loading }) {
           }
         }, label))
       ),
-      tab === 'chart' && React.createElement(Pn.InsightCard, { seas, name: meta.name }),
+      tab === 'chart' && !us && React.createElement(Pn.InsightCard, { seas, name: meta.name }),
+      tab === 'chart' && us && React.createElement('div', { style: { ...T.glassSoft, borderRadius: 14, padding: '14px 16px', fontSize: 12.5, color: T.tx2, lineHeight: 1.7 } },
+        `${meta.name}（${window.dispCode(ticker)}）為美股 ETF，以美元計價。台灣景氣燈號與季節性分析不適用；請切換到「對比」分頁查看 0050 / VOO / QQQ 的報酬、風險與相關性比較。`),
+      tab === 'compare' && React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+        React.createElement(Pn.Panel, { title: '走勢對比', sub: '基準 = 100', pad: 14 },
+          React.createElement(window.CompareChart, { series: cmp || [], names, height: 200 })),
+        React.createElement(Pn.Panel, { title: '報酬與風險', pad: 14 },
+          cmpData ? React.createElement(Pn.CompareTable, { data: cmpData, names }) : React.createElement('div', { style: { color: T.txDim, fontSize: 12 } }, '載入中...')),
+        React.createElement(Pn.Panel, { title: '相關性矩陣', sub: '日報酬連動度', pad: 14 },
+          cmpData ? React.createElement(Pn.CorrMatrix, { data: cmpData, names }) : React.createElement('div', { style: { color: T.txDim, fontSize: 12 } }, '載入中...')),
+        React.createElement(Pn.Panel, { title: '定期定額試算', pad: 14 },
+          cmpData ? React.createElement(Pn.DCAPanel, { data: cmpData, names }) : React.createElement('div', { style: { color: T.txDim, fontSize: 12 } }, '載入中...')),
+        React.createElement(Pn.Panel, { title: '分散與重疊', pad: 14 }, React.createElement(Pn.OverlapNote, null))
+      ),
       tab === 'seasonal' && React.createElement(Pn.Panel, { title: '3–4 月季節性回檔', sub: '✓ 好買點 ! 留意 · 無回調', pad: 14 },
         React.createElement(Pn.SeasonalPanel, { seas })),
       tab === 'lights' && React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
@@ -204,6 +257,7 @@ function App() {
   const [period, setPeriod] = useState('ALL');
   const [cache, setCache] = useState({});      // ticker -> rows[]
   const [cmpCache, setCmpCache] = useState({}); // ticker -> rows[]
+  const [cmpData, setCmpData] = useState(null); // /api/compare 分析結果
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { localStorage.setItem('tw_device', device); }, [device]);
@@ -230,6 +284,14 @@ function App() {
     });
   }, []);
 
+  // fetch 三檔對比分析指標（報酬/風險/定期定額/相關性）
+  useEffect(() => {
+    fetch(`${API}/compare?tickers=${COMPARE_TICKERS.join(',')}&start=2016-01-01`)
+      .then(r => r.json())
+      .then(d => { if (d && d.metrics) setCmpData(d); })
+      .catch(() => {});
+  }, []);
+
   const rows = (cache[ticker] || []).filter(r => r.close != null);
   const cmp = COMPARE_TICKERS.map(c => ({ code: c, rows: (cmpCache[c] || []).filter(r => r.close != null).filter((_, i) => i % 3 === 0) }));
 
@@ -239,7 +301,7 @@ function App() {
       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 9 } },
         React.createElement('div', { style: { width: 26, height: 26, borderRadius: 8, background: `linear-gradient(135deg,${T.acc},${T.dn})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: '#fff' } }, '燈'),
         React.createElement('span', { style: { fontSize: 14.5, fontWeight: 800, color: T.tx, letterSpacing: '0.01em' } }, '景氣選股'),
-        React.createElement('span', { style: { fontSize: 11, color: T.txDim, fontFamily: window.MONO } }, 'TW · 景氣燈號 × 日K')
+        React.createElement('span', { style: { fontSize: 11, color: T.txDim, fontFamily: window.MONO } }, 'TW + US · 0050 vs VOO vs QQQ')
       ),
       loading && React.createElement('span', { style: { fontSize: 11, color: T.acc, fontFamily: window.MONO, marginLeft: 8 } }, '⟳ 載入中...'),
       React.createElement('div', { style: { marginLeft: 'auto', display: 'flex', background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 10, padding: 3, gap: 2 } },
@@ -253,8 +315,8 @@ function App() {
       )
     ),
     device === 'desktop'
-      ? React.createElement(Desktop, { ticker, setTicker, period, setPeriod, rows, loading, cmp })
-      : React.createElement(Mobile, { ticker, setTicker, period, setPeriod, rows, loading })
+      ? React.createElement(Desktop, { ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpData })
+      : React.createElement(Mobile, { ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpData })
   );
 }
 
