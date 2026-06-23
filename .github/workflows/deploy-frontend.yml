@@ -1,0 +1,33 @@
+name: Deploy frontend to GitHub Pages
+
+# push 到 main 且動到 frontend 內容時，自動把前端發布到 gh-pages 分支
+# （沿用原本 `npm run deploy` 的 gh-pages 流程，無需另外設定）
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:   # 也可在 Actions 頁面手動觸發
+
+permissions:
+  contents: write      # 推送到 gh-pages 分支所需
+
+concurrency:
+  group: deploy-gh-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish frontend/ to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./frontend
+          publish_branch: gh-pages
+          # peaceiris 會自動加 .nojekyll（等同原本的 --nojekyll）
