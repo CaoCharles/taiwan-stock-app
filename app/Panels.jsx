@@ -202,6 +202,133 @@ Pn.SeasonalPanel = function({ seas }){
   );
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+//  多股對比分析（0050 vs VOO vs QQQ）
+// ════════════════════════════════════════════════════════════════════════════
+Pn.CMP_PALETTE = ['#7b6cf6', '#ff9f43', '#2dd4d4', '#ff5668'];
+
+// ---- 報酬與風險比較表 ----
+Pn.CompareTable = function({ data, names }){
+  const T=window.T, fmt=window.fmt;
+  if(!data || !data.metrics) return null;
+  const ts = data.tickers;
+  const cols = [
+    { k:'r1', l:'近1年',  get:m=>m.ret['1Y'], pct:true, sign:true },
+    { k:'r3', l:'近3年',  get:m=>m.ret['3Y'], pct:true, sign:true },
+    { k:'r5', l:'近5年',  get:m=>m.ret['5Y'], pct:true, sign:true },
+    { k:'cagr', l:'年化(CAGR)', get:m=>m.cagr, pct:true, sign:true },
+    { k:'vol', l:'年化波動', get:m=>m.vol, pct:true, sign:false, dim:true },
+    { k:'mdd', l:'最大回撤', get:m=>m.mdd, pct:true, neg:true },
+    { k:'sh', l:'夏普值', get:m=>m.sharpe, pct:false, sign:false },
+  ];
+  const cell = (v, c, color) => v==null ? '—'
+    : c.pct ? fmt.pct1(v) : v.toFixed(2);
+  const Th = (txt, right) => React.createElement('th',{ style:{ fontSize:10.5, color:T.txDim, fontWeight:600, padding:'6px 10px', textAlign:right?'right':'left', whiteSpace:'nowrap', borderBottom:`1px solid ${T.line}` } }, txt);
+  return React.createElement('div',{ style:{ overflowX:'auto' } },
+    React.createElement('table',{ style:{ width:'100%', borderCollapse:'collapse', minWidth:560 } },
+      React.createElement('thead',null, React.createElement('tr',null,
+        Th('標的', false), ...cols.map(c=>Th(c.l, true))
+      )),
+      React.createElement('tbody',null,
+        ts.map((t,i)=>{ const m=data.metrics[t]; if(!m) return null;
+          const dot=Pn.CMP_PALETTE[i%Pn.CMP_PALETTE.length];
+          return React.createElement('tr',{ key:t },
+            React.createElement('td',{ style:{ padding:'9px 10px', borderBottom:`1px solid ${T.lineSoft}` } },
+              React.createElement('div',{ style:{ display:'flex', alignItems:'center', gap:8 } },
+                window.UI.Dot({ c:dot, size:9 }),
+                React.createElement('span',{ style:{ fontFamily:window.MONO, fontWeight:700, color:T.tx, fontSize:13 } }, window.dispCode(t)),
+                React.createElement('span',{ style:{ fontSize:11, color:T.txDim } }, (names&&names[t])||''),
+                React.createElement('span',{ style:{ fontSize:9.5, color:T.txDim, border:`1px solid ${T.line}`, borderRadius:5, padding:'1px 5px' } }, m.currency)
+              )
+            ),
+            ...cols.map(c=>{ const v=c.get(m);
+              const color = v==null ? T.txDim
+                : c.neg ? T.dn
+                : c.dim ? T.tx2
+                : c.sign ? signColor(v)
+                : T.tx;
+              return React.createElement('td',{ key:c.k, style:{ padding:'9px 10px', textAlign:'right', fontFamily:window.MONO, fontSize:13, fontWeight:700, color, borderBottom:`1px solid ${T.lineSoft}` } }, cell(v,c,color));
+            })
+          );
+        })
+      )
+    )
+  );
+};
+
+// ---- 定期定額 vs 單筆投入 ----
+Pn.DCAPanel = function({ data, names }){
+  const T=window.T, fmt=window.fmt;
+  if(!data || !data.metrics) return null;
+  const ts = data.tickers;
+  const all = ts.flatMap(t=>{ const m=data.metrics[t]; return m?[m.dca.dca_ret, m.dca.lump_ret]:[]; });
+  const max = Math.max(10, ...all.map(Math.abs));
+  const bar = (val, color) => React.createElement('div',{ style:{ flex:1, height:16, background:T.bg2, borderRadius:5, position:'relative', overflow:'hidden' } },
+    React.createElement('div',{ style:{ position:'absolute', left:0, top:0, height:'100%', width:(Math.abs(val)/max*100)+'%', background:color, opacity:0.85, borderRadius:5 } })
+  );
+  return React.createElement('div',{ style:{ display:'flex', flexDirection:'column', gap:14 } },
+    ts.map((t,i)=>{ const m=data.metrics[t]; if(!m) return null;
+      const dot=Pn.CMP_PALETTE[i%Pn.CMP_PALETTE.length];
+      const rows=[ ['定期定額', m.dca.dca_ret, dot], ['單筆投入', m.dca.lump_ret, T.tx2] ];
+      return React.createElement('div',{ key:t },
+        React.createElement('div',{ style:{ display:'flex', alignItems:'center', gap:8, marginBottom:7 } },
+          window.UI.Dot({ c:dot, size:8 }),
+          React.createElement('span',{ style:{ fontFamily:window.MONO, fontWeight:700, color:T.tx, fontSize:12.5 } }, window.dispCode(t)),
+          React.createElement('span',{ style:{ fontSize:10.5, color:T.txDim } }, `每月投入 · 共 ${m.dca.months} 個月`)
+        ),
+        rows.map(([lb,val,col],j)=> React.createElement('div',{ key:j, style:{ display:'flex', alignItems:'center', gap:9, marginBottom:5 } },
+          React.createElement('span',{ style:{ width:56, fontSize:11, color:T.tx2 } }, lb),
+          bar(val, col),
+          React.createElement('span',{ style:{ width:52, textAlign:'right', fontSize:12, fontWeight:700, color:signColor(val), fontFamily:window.MONO } }, fmt.pct1(val))
+        ))
+      );
+    })
+  );
+};
+
+// ---- 相關性矩陣 ----
+Pn.CorrMatrix = function({ data, names }){
+  const T=window.T;
+  if(!data || !data.corr || !Object.keys(data.corr).length) return null;
+  const ts = data.tickers.filter(t=>data.corr[t]);
+  // color: 高相關=暖(橘紅)、低相關=冷(藍綠)
+  const heat = (v)=>{ const a=Math.max(0,Math.min(1,v)); return `rgba(${Math.round(123+132*a)},${Math.round(108-8*a)},${Math.round(246-200*a)},${0.18+0.42*a})`; };
+  const sz = 'minmax(54px,1fr)';
+  return React.createElement('div',{ style:{ overflowX:'auto' } },
+    React.createElement('div',{ style:{ display:'grid', gridTemplateColumns:`64px repeat(${ts.length},${sz})`, gap:4, minWidth: 64+ts.length*58 } },
+      React.createElement('div'),
+      ...ts.map(t=>React.createElement('div',{ key:'h'+t, style:{ fontSize:11, fontFamily:window.MONO, fontWeight:700, color:T.tx2, textAlign:'center' } }, window.dispCode(t))),
+      ...ts.flatMap(a=>[
+        React.createElement('div',{ key:'r'+a, style:{ fontSize:11, fontFamily:window.MONO, fontWeight:700, color:T.tx2, display:'flex', alignItems:'center' } }, window.dispCode(a)),
+        ...ts.map(b=>{ const v=data.corr[a][b]; const self=a===b;
+          return React.createElement('div',{ key:a+b, style:{ height:38, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center',
+            background: self?T.accSoft:heat(v), border:`1px solid ${self?T.acc+'55':'rgba(255,255,255,0.06)'}`,
+            fontFamily:window.MONO, fontSize:13, fontWeight:700, color: self?T.accHi:T.tx } }, v.toFixed(2));
+        })
+      ])
+    )
+  );
+};
+
+// ---- VOO / QQQ / 0050 重疊與分散說明 ----
+Pn.OverlapNote = function(){
+  const T=window.T;
+  const items=[
+    ['VOO ↔ QQQ', '高度重疊', '兩者皆重壓美國大型科技股（蘋果、微軟、輝達等），QQQ 是 VOO 科技權值的「加強版」，相關性通常 0.9 以上，分散效果有限。'],
+    ['0050 ↔ 美股', '較低重疊', '0050 以台積電為首的台股為主，與美股市場連動但成分不同，是三者中最能提供地域分散的標的。'],
+    ['配置建議', '互補思考', 'VOO 為核心、QQQ 加重科技攻擊、0050 提供台股/地域分散。重疊度可參考左側相關性矩陣量化判斷。'],
+  ];
+  return React.createElement('div',{ style:{ display:'flex', flexDirection:'column', gap:10 } },
+    items.map(([a,tag,desc],i)=> React.createElement('div',{ key:i, style:{ ...T.glassSoft, borderRadius:11, padding:'11px 13px' } },
+      React.createElement('div',{ style:{ display:'flex', alignItems:'center', gap:8, marginBottom:5 } },
+        React.createElement('b',{ style:{ fontSize:12.5, color:T.tx, fontFamily:window.MONO } }, a),
+        React.createElement('span',{ style:{ fontSize:10, color:T.accHi, border:`1px solid ${T.acc}55`, borderRadius:5, padding:'1px 7px' } }, tag)
+      ),
+      React.createElement('div',{ style:{ fontSize:12, color:T.tx2, lineHeight:1.6 } }, desc)
+    ))
+  );
+};
+
 // ---- Light legend ----
 Pn.Legend = function({ wrap=true }){
   const T=window.T, LM=window.LIGHT_META;
