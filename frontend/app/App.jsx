@@ -2,7 +2,20 @@
 const { useState, useMemo, useEffect } = React;
 
 const API = 'https://taiwan-stock-app-5qgi.onrender.com/api';
+const DATA = 'data';   // 每日預先產生的靜態 JSON（gh-pages 同站供應）
 const COMPARE_TICKERS = ['0050.TW', 'VOO', 'QQQ'];
+
+// 先讀靜態 JSON（快、穩、免後端）；查無檔案才回退即時 API
+function fetchStock(ticker) {
+  return fetch(`${DATA}/${encodeURIComponent(ticker)}.json`)
+    .then(r => { if (!r.ok) throw 0; return r.json(); })
+    .catch(() => fetch(`${API}/stock?ticker=${ticker}&start=2016-01-01`).then(r => r.json()));
+}
+function fetchCompare() {
+  return fetch(`${DATA}/compare.json`)
+    .then(r => { if (!r.ok) throw 0; return r.json(); })
+    .catch(() => fetch(`${API}/compare?tickers=${COMPARE_TICKERS.join(',')}&start=2016-01-01`).then(r => r.json()));
+}
 
 function filterPeriod(rows, p) {
   if (p === 'ALL' || !rows.length) return rows;
@@ -297,8 +310,7 @@ function App() {
   useEffect(() => {
     if (cache[ticker]) return;
     setLoading(true);
-    fetch(`${API}/stock?ticker=${ticker}&start=2016-01-01`)
-      .then(r => r.json())
+    fetchStock(ticker)
       .then(d => { if (d.rows) setCache(p => ({ ...p, [ticker]: d.rows })); })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -308,8 +320,7 @@ function App() {
   useEffect(() => {
     COMPARE_TICKERS.forEach(t => {
       if (cmpCache[t]) return;
-      fetch(`${API}/stock?ticker=${t}&start=2016-01-01`)
-        .then(r => r.json())
+      fetchStock(t)
         .then(d => { if (d.rows) setCmpCache(p => ({ ...p, [t]: d.rows })); })
         .catch(() => {});
     });
@@ -317,8 +328,7 @@ function App() {
 
   // fetch 三檔對比分析指標（報酬/風險/定期定額/相關性）
   useEffect(() => {
-    fetch(`${API}/compare?tickers=${COMPARE_TICKERS.join(',')}&start=2016-01-01`)
-      .then(r => r.json())
+    fetchCompare()
       .then(d => { if (d && d.metrics) setCmpData(d); })
       .catch(() => {});
   }, []);

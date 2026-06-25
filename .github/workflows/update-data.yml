@@ -1,0 +1,53 @@
+name: Update stock data
+
+# 每日抓股價 → 產生 frontend/data/*.json → commit 回 main 並發布到 gh-pages。
+# GitHub 的 runner 連得到 Yahoo Finance，前端因此可直接讀靜態 JSON，免依賴 Render 後端。
+on:
+  schedule:
+    - cron: '0 22 * * 1-5'   # 工作日 22:00 UTC（美股收盤後），台股當日資料也已就緒
+  workflow_dispatch:          # 可在 Actions 頁面手動觸發
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install yfinance pandas numpy
+
+      - name: Build static JSON
+        working-directory: backend
+        run: python build_static_data.py
+
+      - name: Commit data back to main
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add frontend/data
+          if git diff --cached --quiet; then
+            echo "資料無變化，略過 commit"
+          else
+            git commit -m "data: 更新股價靜態資料 $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./frontend
+          publish_branch: gh-pages
