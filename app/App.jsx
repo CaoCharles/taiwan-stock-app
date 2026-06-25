@@ -14,6 +14,29 @@ function filterPeriod(rows, p) {
 }
 const PERIODS = ['1Y', '3Y', '5Y', 'ALL'];
 
+// 取資料中出現過的年份（由新到舊）
+function yearsOf(rows) {
+  const set = new Set(rows.map(r => r.date.slice(0, 4)));
+  return Array.from(set).sort().reverse();
+}
+// 依「單一年份 or 期間快捷」過濾
+function filterView(rows, year, period) {
+  if (year) return rows.filter(r => r.date.slice(0, 4) === year);
+  return filterPeriod(rows, period);
+}
+
+// 年份頁籤：全部 + 每一年
+function YearTabs({ rows, year, setYear, setPeriod }) {
+  const T = window.T;
+  const years = useMemo(() => yearsOf(rows), [rows]);
+  if (!years.length) return null;
+  return React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' } },
+    React.createElement('span', { style: { fontSize: 10.5, color: T.txDim, marginRight: 2 } }, '逐年'),
+    window.UI.Chip({ key: 'all', children: '全部', mono: true, active: !year, onClick: () => setYear(null) }),
+    years.map(y => window.UI.Chip({ key: y, children: y, mono: true, active: y === year, onClick: () => { setYear(y); if (setPeriod) setPeriod('ALL'); } }))
+  );
+}
+
 function StockHeader({ code, name, st, period, setPeriod, big }) {
   const T = window.T;
   const chg = st ? st.ret : 0;
@@ -65,13 +88,13 @@ function LoadingOverlay({ height = 360 }) {
 }
 
 // ── DESKTOP ──
-function Desktop({ ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpData }) {
+function Desktop({ ticker, setTicker, period, setPeriod, year, setYear, rows, loading, cmp, cmpData }) {
   const T = window.T, Pn = window.Pn;
   const meta = window.TICKERS.find(t => t.code === ticker) || { name: '' };
   const names = Object.fromEntries(window.TICKERS.map(t => [t.code, t.name]));
   const us = window.isUS(ticker);
 
-  const filtered = useMemo(() => filterPeriod(rows, period), [rows, period]);
+  const filtered = useMemo(() => filterView(rows, year, period), [rows, year, period]);
   const st = useMemo(() => Pn.stats(filtered), [filtered]);
   const seas = useMemo(() => Pn.seasonal(rows), [rows]);
   const chg = st ? st.ret : 0;
@@ -95,12 +118,15 @@ function Desktop({ ticker, setTicker, period, setPeriod, rows, loading, cmp, cmp
       React.createElement('div', { style: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 } },
         !us && React.createElement(Pn.CurrentLight, null),
         React.createElement('div', { style: { display: 'flex', gap: 5 } },
-          PERIODS.map(p => window.UI.Chip({ key: p, children: p, mono: true, active: p === period, onClick: () => setPeriod(p) }))
+          PERIODS.map(p => window.UI.Chip({ key: p, children: p, mono: true, active: !year && p === period, onClick: () => { setPeriod(p); setYear(null); } }))
         )
       )
     ),
     // chart
     React.createElement(Pn.Panel, { pad: 18, style: { marginTop: 14 } },
+      React.createElement('div', { style: { marginBottom: 12 } },
+        React.createElement(YearTabs, { rows, year, setYear, setPeriod })
+      ),
       loading
         ? React.createElement(LoadingOverlay, { height: 430 })
         : React.createElement(window.PriceChart, { rows: filtered, height: 430, showLights: !us }),
@@ -160,14 +186,14 @@ function CompareSection({ cmp, cmpData, names }) {
 }
 
 // ── MOBILE ──
-function Mobile({ ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpData }) {
+function Mobile({ ticker, setTicker, period, setPeriod, year, setYear, rows, loading, cmp, cmpData }) {
   const T = window.T, Pn = window.Pn;
   const [tab, setTab] = useState('chart');
   const meta = window.TICKERS.find(t => t.code === ticker) || { name: '' };
   const us = window.isUS(ticker);
   const names = Object.fromEntries(window.TICKERS.map(t => [t.code, t.name]));
 
-  const filtered = useMemo(() => filterPeriod(rows, period), [rows, period]);
+  const filtered = useMemo(() => filterView(rows, year, period), [rows, year, period]);
   const st = useMemo(() => Pn.stats(filtered), [filtered]);
   const seas = useMemo(() => Pn.seasonal(rows), [rows]);
 
@@ -178,13 +204,16 @@ function Mobile({ ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpD
     React.createElement('div', { style: { padding: '8px 14px 10px', borderBottom: `1px solid rgba(255,255,255,0.08)`, background: 'rgba(8,11,18,0.55)', backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)', position: 'sticky', top: 0, zIndex: 5 } },
       React.createElement(SearchRow, { ticker, setTicker, compact: true }),
       React.createElement('div', { style: { marginTop: 11 } },
-        React.createElement(StockHeader, { code: ticker, name: meta.name, st, period, setPeriod })
+        React.createElement(StockHeader, { code: ticker, name: meta.name, st, period: year ? '' : period, setPeriod: (p) => { setPeriod(p); setYear(null); } })
       )
     ),
     React.createElement('div', { style: { padding: '12px 14px 80px' } },
       React.createElement(Pn.KPIStrip, { st, cols: 2 }),
       React.createElement('div', { style: { marginTop: 12 } },
         React.createElement(Pn.Panel, { pad: 12 },
+          React.createElement('div', { style: { marginBottom: 10 } },
+            React.createElement(YearTabs, { rows, year, setYear, setPeriod })
+          ),
           loading
             ? React.createElement(LoadingOverlay, { height: 220 })
             : React.createElement(window.PriceChart, { rows: filtered, height: 220, compact: true, showLights: !us }),
@@ -255,12 +284,14 @@ function App() {
   const [device, setDevice] = useState(() => localStorage.getItem('tw_device') || 'desktop');
   const [ticker, setTicker] = useState('0050.TW');
   const [period, setPeriod] = useState('ALL');
+  const [year, setYear] = useState(null);   // null = 全部，'2024' = 單一年
   const [cache, setCache] = useState({});      // ticker -> rows[]
   const [cmpCache, setCmpCache] = useState({}); // ticker -> rows[]
   const [cmpData, setCmpData] = useState(null); // /api/compare 分析結果
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { localStorage.setItem('tw_device', device); }, [device]);
+  useEffect(() => { setYear(null); }, [ticker]);   // 換股票時回到「全部」
 
   // fetch main ticker data
   useEffect(() => {
@@ -315,8 +346,8 @@ function App() {
       )
     ),
     device === 'desktop'
-      ? React.createElement(Desktop, { ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpData })
-      : React.createElement(Mobile, { ticker, setTicker, period, setPeriod, rows, loading, cmp, cmpData })
+      ? React.createElement(Desktop, { ticker, setTicker, period, setPeriod, year, setYear, rows, loading, cmp, cmpData })
+      : React.createElement(Mobile, { ticker, setTicker, period, setPeriod, year, setYear, rows, loading, cmp, cmpData })
   );
 }
 
