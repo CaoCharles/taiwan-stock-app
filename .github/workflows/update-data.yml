@@ -27,7 +27,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        run: pip install yfinance pandas numpy
+        run: pip install -r backend/requirements.txt   # 含 flask（build script 會 import app）
 
       - name: Build static JSON
         working-directory: backend
