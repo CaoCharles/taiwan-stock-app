@@ -34,9 +34,10 @@ Pn.seasonal = function(rows){
 };
 
 // ---- atoms ----
-function Panel({ title, sub, right, children, pad=14, style }){
+// prime=true → 毛玻璃主面板（視覺重心）；預設 → 實色次面板（層級較低、效能較好）
+function Panel({ title, sub, right, children, pad=14, style, prime=false }){
   const T=window.T;
-  return React.createElement('div',{ style:{ ...T.glass, borderRadius:16, padding:pad, ...style } },
+  return React.createElement('div',{ style:{ ...(prime?T.glass:T.card), borderRadius:16, padding:pad, ...style } },
     (title||right) && React.createElement('div',{ style:{ display:'flex', alignItems:'baseline', gap:8, marginBottom:sub?2:12 } },
       title && React.createElement('div',{ style:{ fontSize:13, fontWeight:700, color:T.tx, letterSpacing:'0.01em', whiteSpace:'nowrap' } }, title),
       right && React.createElement('div',{ style:{ marginLeft:'auto' } }, right)
@@ -79,10 +80,11 @@ Pn.KPIInline = function({ st }){
     { l:'最大回檔', v:window.fmt.pct1(st.mdd), c:T.dn },
     { l:'現價位階', v:Math.round(st.pos*100)+'%', c:T.tx, bar:st.pos },
   ];
+  // 18px / w700：把主角讓給左側 32px 價格，KPI 退為輔助資訊
   return React.createElement('div',{ style:{ display:'flex', alignItems:'stretch' } },
-    items.map((it,i)=> React.createElement('div',{ key:i, style:{ padding:'0 20px', borderLeft:i?`1px solid rgba(255,255,255,0.08)`:'none', minWidth:96 } },
-      React.createElement('div',{ style:{ fontSize:10.5, color:T.txDim, marginBottom:6, letterSpacing:'0.04em' } }, it.l),
-      React.createElement('div',{ style:{ fontSize:22, fontWeight:800, color:it.c, fontFamily:window.MONO, lineHeight:1 } }, it.v),
+    items.map((it,i)=> React.createElement('div',{ key:i, style:{ padding:'0 20px', borderLeft:i?`1px solid rgba(255,255,255,0.08)`:'none', minWidth:92 } },
+      React.createElement('div',{ style:{ fontSize:10, color:T.txDim, marginBottom:6, letterSpacing:'0.04em' } }, it.l),
+      React.createElement('div',{ style:{ fontSize:18, fontWeight:700, color:it.c, fontFamily:window.MONO, lineHeight:1 } }, it.v),
       it.bar!=null && React.createElement('div',{ style:{ marginTop:7, height:4, borderRadius:3, background:'rgba(255,255,255,0.08)', overflow:'hidden' } },
         React.createElement('div',{ style:{ width:(it.bar*100)+'%', height:'100%', background:`linear-gradient(90deg,${T.dn},${T.up})`, borderRadius:3 } })
       )
@@ -121,7 +123,7 @@ Pn.InsightCard = function({ seas, name }){
     React.createElement('div',{ style:{ fontSize:15.5, color:T.tx, lineHeight:1.7, fontWeight:500 } },
       `過去 `, React.createElement('b',{style:{color:T.accHi,fontFamily:window.MONO}}, valid.length), ` 年，`,
       name, ` 的 3–4 月平均回檔 `,
-      React.createElement('b',{style:{color:T.up,fontFamily:window.MONO}}, window.fmt.pct1(avg)),
+      React.createElement('b',{style:{color:T.buy,fontFamily:window.MONO}}, window.fmt.pct1(avg)),
       `，其中 `, React.createElement('b',{style:{color:T.accHi,fontFamily:window.MONO}}, good.length),
       ` 年落在綠燈／黃藍燈且回檔逾 3%，屬於品質較佳的進場點。`
     )
@@ -139,7 +141,7 @@ Pn.InsightBanner = function({ seas, name }){
     React.createElement('span',{ style:{ fontSize:11, color:T.accHi, fontWeight:800, letterSpacing:'0.08em', whiteSpace:'nowrap' } }, '◆ 季節性洞察'),
     React.createElement('div',{ style:{ fontSize:15, color:T.tx, lineHeight:1.6, fontWeight:500 } },
       `過去 `, React.createElement('b',{style:{color:T.accHi,fontFamily:window.MONO}}, valid.length), ` 年，`, name,
-      ` 的 3–4 月平均回檔 `, React.createElement('b',{style:{color:T.up,fontFamily:window.MONO}}, window.fmt.pct1(avg)),
+      ` 的 3–4 月平均回檔 `, React.createElement('b',{style:{color:T.buy,fontFamily:window.MONO}}, window.fmt.pct1(avg)),
       `，其中 `, React.createElement('b',{style:{color:T.accHi,fontFamily:window.MONO}}, good.length),
       ` 年落在綠燈／黃藍燈且回檔逾 3%，為品質較佳的進場點。`
     )
@@ -188,7 +190,8 @@ Pn.SeasonalPanel = function({ seas }){
     seas.slice().reverse().map(s=>{ const meta=s.light?LM[s.light.l]:null;
       const w=Math.abs(Math.min(0,s.dip))/maxDip*100;
       const good=meta&&(s.light.l==='green'||s.light.l==='yellow_blue')&&s.dip<=-3;
-      const dc= s.dip<=-5?T.up : s.dip<=-3?'#ff9f43' : s.dip<0?T.tx2 : T.dn;
+      // 「回檔深度＝買點品質」用琥珀色系，與紅漲綠跌的報酬色系分離，避免深回檔被誤讀成上漲
+      const dc= s.dip<=-5?T.buy : s.dip<=-3?T.buyDim : s.dip<0?T.tx2 : T.tx3;
       return React.createElement('div',{ key:s.y, style:{ display:'flex', alignItems:'center', gap:10 } },
         React.createElement('div',{ style:{ width:34, fontSize:11.5, color:T.tx2, fontFamily:window.MONO, fontWeight:600 } }, s.y),
         meta && window.UI.Dot({ c:meta.dot, size:8, glow:good?meta.glow:null }),
@@ -196,7 +199,7 @@ Pn.SeasonalPanel = function({ seas }){
           React.createElement('div',{ style:{ position:'absolute', left:0, top:0, height:'100%', width:w+'%', background:dc, opacity:0.85, borderRadius:5 } })
         ),
         React.createElement('div',{ style:{ width:54, textAlign:'right', fontSize:12, fontWeight:700, color:dc, fontFamily:window.MONO } }, window.fmt.pct1(s.dip)),
-        React.createElement('div',{ style:{ width:30, textAlign:'center', fontSize:13 } }, good?'✓':(s.dip<=-3?'!':'·'))
+        React.createElement('div',{ style:{ width:30, textAlign:'center', fontSize:13, color: good?T.buy:(s.dip<=-3?T.buyDim:T.tx3), fontWeight:800 } }, good?'✓':(s.dip<=-3?'!':'·'))
       );
     })
   );

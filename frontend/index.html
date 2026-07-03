@@ -3,10 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#080b12" />
+<meta name="description" content="以台灣景氣對策信號輔助台股與美股 ETF 的長期投資分析：0050、VOO、QQQ 對比、季節性回檔與定期定額試算。" />
 <title>景氣選股 · 台股投資分析</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237b6cf6'/%3E%3Cstop offset='1' stop-color='%234a6bff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='23' r='7.5' fill='%23fff'/%3E%3Crect x='27' y='36' width='10' height='16' rx='4' fill='%23fff' opacity='0.55'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #080b12; }
@@ -16,16 +19,80 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #232c3d; border-radius: 6px; }
   ::-webkit-scrollbar-thumb:hover { background: #313c52; }
-  input::placeholder { color: #5b6680; }
+  input::placeholder { color: #6b7794; }
   button { font-family: inherit; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ── 鍵盤焦點（無障礙） ── */
+  button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid rgba(123,108,246,0.8);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  /* ── Chip：hover / active 由 class 控制，inline style 只負責 active 配色 ── */
+  .chip {
+    padding: 5px 11px; font-size: 12px; cursor: pointer; white-space: nowrap;
+    border-radius: 7px; border: 1px solid #1e2636;
+    background: transparent; color: #929fb6; font-weight: 500;
+    transition: background .13s ease, color .13s ease, border-color .13s ease;
+  }
+  .chip:hover:not(.chip--on) { background: rgba(255,255,255,0.06); color: #e9eef8; border-color: #2a3448; }
+  .chip--on { background: #7b6cf6; color: #fff; border-color: transparent; font-weight: 700; }
+  .chip--mono { font-family: 'JetBrains Mono','SF Mono',ui-monospace,monospace; letter-spacing: 0.02em; }
+
+  /* ── Skeleton shimmer（載入佔位） ── */
+  @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+  .sk {
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.045) 25%, rgba(255,255,255,0.10) 40%, rgba(255,255,255,0.045) 55%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  /* ── Splash：React mount 前的首屏（會被 render 自動取代） ── */
+  .splash {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 22px;
+    background:
+      radial-gradient(1000px 680px at 10% -5%, rgba(123,108,246,0.20), transparent 58%),
+      radial-gradient(900px 640px at 96% 4%, rgba(25,199,154,0.12), transparent 54%),
+      #080b12;
+  }
+  .splash-logo {
+    width: 52px; height: 52px; border-radius: 15px;
+    background: linear-gradient(135deg, #7b6cf6, #4a6bff);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font: 900 24px 'Noto Sans TC', sans-serif;
+    box-shadow: 0 10px 40px rgba(123,108,246,0.35);
+    animation: splashPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes splashPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+  .splash-title { color: #e9eef8; font: 800 16px 'Noto Sans TC', sans-serif; letter-spacing: 0.04em; }
+  .splash-bars { display: flex; flex-direction: column; gap: 9px; width: min(300px, 72vw); }
+  .splash-bars .sk:nth-child(1) { height: 12px; width: 100%; }
+  .splash-bars .sk:nth-child(2) { height: 12px; width: 78%; }
+  .splash-bars .sk:nth-child(3) { height: 12px; width: 56%; }
+
+  /* ── 動效偏好：減少動態 ── */
+  @media (prefers-reduced-motion: reduce) {
+    .sk, .splash-logo { animation: none; }
+    * { transition-duration: 0.01ms !important; }
+  }
 </style>
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
-<div id="root"></div>
+<div id="root">
+  <!-- React mount 前的載入畫面 -->
+  <div class="splash">
+    <div class="splash-logo">燈</div>
+    <div class="splash-title">景氣選股</div>
+    <div class="splash-bars"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+  </div>
+</div>
 
 <!-- 靜態資料 -->
 <script src="app/theme.js"></script>
